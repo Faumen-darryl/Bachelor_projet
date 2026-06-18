@@ -1,0 +1,12 @@
+-- AlterTable
+ALTER TABLE `users` ADD COLUMN `companyAddress` VARCHAR(191) NULL,
+    ADD COLUMN `companyCity` VARCHAR(191) NULL,
+    ADD COLUMN `companyName` VARCHAR(191) NULL,
+    ADD COLUMN `companyZip` VARCHAR(191) NULL,
+    ADD COLUMN `kycRejectReason` TEXT NULL,
+    ADD COLUMN `kycRejectedAt` DATETIME(3) NULL,
+    ADD COLUMN `kycStatus` ENUM('NON_SOUMIS', 'EN_ATTENTE', 'VALIDE', 'REJETE') NOT NULL DEFAULT 'NON_SOUMIS',
+    ADD COLUMN `kycSubmittedAt` DATETIME(3) NULL,
+    ADD COLUMN `kycValidatedAt` DATETIME(3) NULL,
+    ADD COLUMN `rib` VARCHAR(191) NULL,
+    ADD COLUMN `siret` VARCHAR(191) NULL;

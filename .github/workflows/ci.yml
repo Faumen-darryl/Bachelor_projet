@@ -1,0 +1,89 @@
+name: CI/CD - Evently
+
+on:
+  push:
+    branches: ["main", "develop"]
+  pull_request:
+    branches: ["main", "develop"]
+
+jobs:
+  test:
+    name: Lint, Build & Test
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: evently_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Installer les dépendances
+        run: npm ci
+
+      - name: Générer le client Prisma
+        run: npx prisma generate --schema=apps/api/prisma/schema.prisma
+
+      - name: Appliquer les migrations (base de test)
+        run: npx prisma migrate deploy --schema=apps/api/prisma/schema.prisma
+        env:
+          DATABASE_URL: "mysql://root:root@127.0.0.1:3306/evently_test"
+
+      - name: Lancer le linter
+        run: npm run lint --workspace=apps/api --if-present
+
+      - name: Lancer les tests Jest (API)
+        run: npm run test --workspace=apps/api
+        env:
+          DATABASE_URL: "mysql://root:root@127.0.0.1:3306/evently_test"
+          DATABASE_URL_TEST: "mysql://root:root@127.0.0.1:3306/evently_test"
+          JWT_SECRET: "test_secret_ci"
+
+      - name: Build du Frontend (Next.js)
+        run: npm run build --workspace=apps/web
+
+      - name: Build du Backend (API)
+        run: npm run build --workspace=apps/api
+
+  deploy:
+    name: Déploiement en production
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Déployer sur le serveur via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            cd /var/www/evently
+            git pull origin main
+            docker compose build
+            docker compose up -d
+            docker compose exec -T api npx prisma migrate deploy
+
+      - name: Vérification post-déploiement
+        run: echo "✅ Déploiement terminé avec succès sur ${{ secrets.SERVER_HOST }}"
