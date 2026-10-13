@@ -4,7 +4,7 @@ services:
   mysql:
     image: mysql:8.0
     container_name: evently_mysql
-    restart: unless-stopped
+    
     environment:
       MYSQL_ROOT_PASSWORD: root
       MYSQL_DATABASE: evently
@@ -13,10 +13,12 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD-SHELL","mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 20
+      start_period: 60s
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine

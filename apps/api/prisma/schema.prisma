@@ -7,7 +7,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─── Enums ───────────────────────────────────────────────
+// Enums
 
 enum Role {
   CLIENT
@@ -63,7 +63,7 @@ enum NotificationType {
   AVIS
 }
 
-// ─── Modèles ─────────────────────────────────────────────
+// Modèles 
 
 model User {
   id        Int      @id @default(autoincrement())
@@ -77,8 +77,12 @@ model User {
   isVerified  Boolean  @default(false)
   otpCode     String?
   otpExpiry   DateTime?
+  
+  // Réinitialisation du mot de passe
+  resetPasswordToken  String?   
+  resetPasswordExpiry DateTime? 
 
-  // ── Champs KYC prestataire ──
+  // Champs KYC prestataire
   companyName     String?
   siret           String?
   rib             String?
@@ -299,7 +303,7 @@ model Notification {
   @@map("notifications")
 }
 
-// ─── Service Bookings (réservations directes de services) ─
+// Service Bookings (réservations directes de services)
 
 model ServiceBooking {
   id           Int               @id @default(autoincrement())

@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma';
 
+// Crée une nouvelle réservation pour un service.
 export const bookService = async (
   clientId: number,
   data: {
@@ -17,9 +18,13 @@ export const bookService = async (
 
   if (!service) throw new Error('SERVICE_NOT_FOUND');
   if (!service.isActive) throw new Error('SERVICE_NOT_AVAILABLE');
-  if (service.providerId === clientId) throw new Error('CANNOT_BOOK_OWN_SERVICE');
+  if (service.providerId === clientId) {
+    throw new Error('CANNOT_BOOK_OWN_SERVICE');
+  }
 
   const totalAmount = Number(service.price);
+
+  // L'acompte correspond à 30 % du prix total du service.
   const deposit = totalAmount * 0.3;
 
   const booking = await prisma.serviceBooking.create({
@@ -37,16 +42,27 @@ export const bookService = async (
       service: {
         include: {
           provider: {
-            select: { id: true, firstName: true, lastName: true, email: true },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
           },
         },
       },
       client: {
-        select: { id: true, firstName: true, lastName: true, email: true },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+        },
       },
     },
   });
 
+  // Informe le prestataire qu'une nouvelle demande de service a été créée.
   await prisma.notification.create({
     data: {
       userId: service.providerId,
@@ -59,7 +75,10 @@ export const bookService = async (
   return booking;
 };
 
-export const getClientServiceBookings = async (clientId: number) => {
+// Récupère les réservations de services effectuées par un client.
+export const getClientServiceBookings = async (
+  clientId: number
+) => {
   return await prisma.serviceBooking.findMany({
     where: { clientId },
     orderBy: { createdAt: 'desc' },
@@ -67,9 +86,16 @@ export const getClientServiceBookings = async (clientId: number) => {
       service: {
         include: {
           provider: {
-            select: { id: true, firstName: true, lastName: true },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+            },
           },
-          photos: { where: { isMain: true }, take: 1 },
+          photos: {
+            where: { isMain: true },
+            take: 1,
+          },
         },
       },
       servicePayments: true,
@@ -77,25 +103,41 @@ export const getClientServiceBookings = async (clientId: number) => {
   });
 };
 
-export const getProviderServiceBookings = async (providerId: number) => {
+// Récupère les réservations de services reçues par un prestataire.
+export const getProviderServiceBookings = async (
+  providerId: number
+) => {
   return await prisma.serviceBooking.findMany({
-    where: { service: { providerId } },
+    where: {
+      service: {
+        providerId,
+      },
+    },
     orderBy: { createdAt: 'desc' },
     include: {
       client: {
         select: {
-          id: true, firstName: true,
-          lastName: true, email: true, phone: true,
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
         },
       },
       service: {
-        select: { id: true, name: true, category: true, price: true },
+        select: {
+          id: true,
+          name: true,
+          category: true,
+          price: true,
+        },
       },
       servicePayments: true,
     },
   });
 };
 
+// Permet au prestataire de confirmer ou de refuser une réservation de service.
 export const confirmServiceBooking = async (
   bookingId: number,
   providerId: number,
@@ -104,33 +146,57 @@ export const confirmServiceBooking = async (
 ) => {
   const booking = await prisma.serviceBooking.findUnique({
     where: { id: bookingId },
-    include: { service: true, client: true },
+    include: {
+      service: true,
+      client: true,
+    },
   });
 
   if (!booking) throw new Error('BOOKING_NOT_FOUND');
-  if (booking.service.providerId !== providerId) throw new Error('FORBIDDEN');
-  if (booking.status !== 'EN_ATTENTE') throw new Error('ALREADY_PROCESSED');
+  if (booking.service.providerId !== providerId) {
+    throw new Error('FORBIDDEN');
+  }
+  if (booking.status !== 'EN_ATTENTE') {
+    throw new Error('ALREADY_PROCESSED');
+  }
 
   await prisma.serviceBooking.update({
     where: { id: bookingId },
     data: { status: action },
   });
 
+  // Informe le client de la décision prise par le prestataire.
   await prisma.notification.create({
     data: {
       userId: booking.clientId,
-      type: action === 'CONFIRMEE' ? 'CONFIRMATION' : 'ANNULATION',
-      title: action === 'CONFIRMEE' ? 'Service confirmé !' : 'Demande refusée',
-      content: action === 'CONFIRMEE'
-        ? `Votre demande pour "${booking.service.name}" a été confirmée.`
-        : `Votre demande pour "${booking.service.name}" a été refusée. ${reason || ''}`,
+      type:
+        action === 'CONFIRMEE'
+          ? 'CONFIRMATION'
+          : 'ANNULATION',
+      title:
+        action === 'CONFIRMEE'
+          ? 'Service confirmé !'
+          : 'Demande refusée',
+      content:
+        action === 'CONFIRMEE'
+          ? `Votre demande pour "${booking.service.name}" a été confirmée.`
+          : `Votre demande pour "${booking.service.name}" a été refusée. ${reason || ''}`,
     },
   });
 
-  return { message: action === 'CONFIRMEE' ? 'Service confirmé' : 'Service refusé' };
+  return {
+    message:
+      action === 'CONFIRMEE'
+        ? 'Service confirmé'
+        : 'Service refusé',
+  };
 };
 
-export const cancelServiceBooking = async (bookingId: number, clientId: number) => {
+// Annule une réservation de service appartenant au client.
+export const cancelServiceBooking = async (
+  bookingId: number,
+  clientId: number
+) => {
   const booking = await prisma.serviceBooking.findUnique({
     where: { id: bookingId },
     include: { service: true },
@@ -138,13 +204,16 @@ export const cancelServiceBooking = async (bookingId: number, clientId: number) 
 
   if (!booking) throw new Error('BOOKING_NOT_FOUND');
   if (booking.clientId !== clientId) throw new Error('FORBIDDEN');
-  if (booking.status === 'TERMINEE') throw new Error('CANNOT_CANCEL');
+  if (booking.status === 'TERMINEE') {
+    throw new Error('CANNOT_CANCEL');
+  }
 
   await prisma.serviceBooking.update({
     where: { id: bookingId },
     data: { status: 'ANNULEE' },
   });
 
+  // Informe le prestataire que la réservation a été annulée.
   await prisma.notification.create({
     data: {
       userId: booking.service.providerId,
@@ -154,9 +223,12 @@ export const cancelServiceBooking = async (bookingId: number, clientId: number) 
     },
   });
 
-  return { message: 'Réservation annulée' };
+  return {
+    message: 'Réservation annulée',
+  };
 };
 
+// Récupère les messages liés à une réservation de service.
 export const getServiceBookingMessages = async (
   bookingId: number,
   userId: number
@@ -167,27 +239,46 @@ export const getServiceBookingMessages = async (
   });
 
   if (!booking) throw new Error('BOOKING_NOT_FOUND');
-  if (booking.clientId !== userId && booking.service.providerId !== userId) {
+
+  // Vérifie que l'utilisateur est bien le client ou le prestataire concerné.
+  if (
+    booking.clientId !== userId &&
+    booking.service.providerId !== userId
+  ) {
     throw new Error('FORBIDDEN');
   }
 
-  // Marquer comme lus SEULEMENT quand on ouvre la conversation
+  // Marque comme lus les messages reçus lorsque la conversation est ouverte.
   await prisma.serviceMessage.updateMany({
-    where: { serviceBookingId: bookingId, receiverId: userId, isRead: false },
+    where: {
+      serviceBookingId: bookingId,
+      receiverId: userId,
+      isRead: false,
+    },
     data: { isRead: true },
   });
 
+  // Retourne les messages dans l'ordre chronologique.
   return await prisma.serviceMessage.findMany({
-    where: { serviceBookingId: bookingId },
-    orderBy: { sentAt: 'asc' },
+    where: {
+      serviceBookingId: bookingId,
+    },
+    orderBy: {
+      sentAt: 'asc',
+    },
     include: {
       sender: {
-        select: { id: true, firstName: true, lastName: true },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+        },
       },
     },
   });
 };
 
+// Envoie un message dans une conversation liée à une réservation de service.
 export const sendServiceMessage = async (
   senderId: number,
   bookingId: number,
@@ -200,23 +291,33 @@ export const sendServiceMessage = async (
 
   if (!booking) throw new Error('BOOKING_NOT_FOUND');
 
-  const receiverId = booking.clientId === senderId
-    ? booking.service.providerId
-    : booking.clientId;
+  // Détermine le destinataire selon l'utilisateur qui envoie le message.
+  const receiverId =
+    booking.clientId === senderId
+      ? booking.service.providerId
+      : booking.clientId;
 
+  // Crée le message comme non lu pour le destinataire.
   const message = await prisma.serviceMessage.create({
     data: {
       senderId,
       receiverId,
       serviceBookingId: bookingId,
       content,
-      isRead: false, // ← Toujours false à la création
+      isRead: false,
     },
     include: {
-      sender: { select: { id: true, firstName: true, lastName: true } },
+      sender: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+        },
+      },
     },
   });
 
+  // Informe le destinataire qu'un nouveau message a été reçu.
   await prisma.notification.create({
     data: {
       userId: receiverId,
@@ -229,65 +330,101 @@ export const sendServiceMessage = async (
   return message;
 };
 
-export const getServiceConversations = async (userId: number) => {
+// Récupère les conversations liées aux réservations de services de l'utilisateur.
+export const getServiceConversations = async (
+  userId: number
+) => {
   const bookings = await prisma.serviceBooking.findMany({
     where: {
       OR: [
         { clientId: userId },
         { service: { providerId: userId } },
       ],
-      serviceMessages: { some: {} },
+      serviceMessages: {
+        some: {},
+      },
     },
     include: {
       client: {
-        select: { id: true, firstName: true, lastName: true },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+        },
       },
       service: {
         include: {
           provider: {
-            select: { id: true, firstName: true, lastName: true },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+            },
           },
         },
       },
       serviceMessages: {
-        orderBy: { sentAt: 'desc' },
+        orderBy: {
+          sentAt: 'desc',
+        },
         take: 1,
       },
     },
-    orderBy: { updatedAt: 'desc' },
+    orderBy: {
+      updatedAt: 'desc',
+    },
   });
 
-  // Calculer les vrais non-lus pour chaque booking
+  // Calcule le nombre de messages non lus pour chaque réservation.
   const unreadCounts = await prisma.serviceMessage.groupBy({
     by: ['serviceBookingId'],
-    where: { receiverId: userId, isRead: false },
-    _count: { id: true },
+    where: {
+      receiverId: userId,
+      isRead: false,
+    },
+    _count: {
+      id: true,
+    },
   });
 
+  // Associe chaque réservation à son nombre de messages non lus.
   const unreadMap: Record<number, number> = {};
-  unreadCounts.forEach(u => {
+
+  unreadCounts.forEach((u) => {
     unreadMap[u.serviceBookingId] = u._count.id;
   });
 
-  return bookings.map(b => {
+  // Prépare les informations nécessaires à l'affichage de chaque conversation.
+  return bookings.map((b) => {
     const lastMessage = b.serviceMessages[0];
     const isClient = b.clientId === userId;
-    const otherUser = isClient ? b.service.provider : b.client;
+    const otherUser = isClient
+      ? b.service.provider
+      : b.client;
 
     return {
       bookingId: b.id,
       type: 'SERVICE' as const,
       otherUser,
-      lastMessage: lastMessage ? {
-        content: lastMessage.content,
-        sentAt: lastMessage.sentAt,
-        senderId: lastMessage.senderId,
-        // isRead est vrai seulement si c'est mon message OU si je l'ai déjà lu
-        isRead: lastMessage.senderId === userId ? true : lastMessage.isRead,
-        isMine: lastMessage.senderId === userId,
-      } : null,
-      // Nombre réel de messages non lus
+      lastMessage: lastMessage
+        ? {
+            content: lastMessage.content,
+            sentAt: lastMessage.sentAt,
+            senderId: lastMessage.senderId,
+
+            // Un message envoyé par l'utilisateur est considéré comme lu de son côté.
+            isRead:
+              lastMessage.senderId === userId
+                ? true
+                : lastMessage.isRead,
+
+            isMine: lastMessage.senderId === userId,
+          }
+        : null,
+
+      // Nombre de messages non lus reçus dans cette conversation.
       unreadCount: unreadMap[b.id] || 0,
+
       serviceName: b.service.name,
       serviceCategory: b.service.category,
       isClient,

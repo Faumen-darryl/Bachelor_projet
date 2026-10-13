@@ -77,7 +77,7 @@ export const generateInvoicePdf = (data: InvoiceData): Buffer => {
 
     // Pied de page
     doc.fontSize(9).fillColor('#aaa')
-      .text('Merci de votre confiance — Evently', 50, 700, { align: 'center' });
+      .text('Merci de votre confiance chez Evently', 50, 700, { align: 'center' });
 
     doc.end();
   }) as unknown as Buffer;

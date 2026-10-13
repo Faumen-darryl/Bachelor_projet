@@ -23,16 +23,24 @@ export const useAuthStore = create<AuthStore>()(
     (set, get) => ({
       user: null,
       token: null,
+
       setAuth: (user, token) => {
         localStorage.setItem('evently_token', token);
         set({ user, token });
       },
+
       logout: () => {
         localStorage.removeItem('evently_token');
-        set({ user: null, token: null });
+        set({
+          user: null,
+          token: null,
+        });
       },
+
       isAuthenticated: () => !!get().token,
     }),
-    { name: 'evently_auth' }
+    {
+      name: 'evently_auth',
+    }
   )
 );

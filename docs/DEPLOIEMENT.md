@@ -1,4 +1,4 @@
-# Procédure de déploiement — Evently
+# Procédure de déploiement  Evently
 
 ## 1. Prérequis
 
